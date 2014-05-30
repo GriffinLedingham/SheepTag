@@ -11,6 +11,32 @@ var io = require('socket.io').listen(server);
 server.listen(3000);  
 io.set('log level', 0);
 
+var players = [];
+
 io.sockets.on('connection', function (socket) {
-  
+  console.log('joined');
+  socket.uuid = null;
+  socket.on('my_uuid',function(id){
+    socket.uuid = id;
+  });
+
+    socket.on('new_player',function(player_data){
+      players.push(player_data.uuid);
+      socket.emit('sync_players',players);
+      socket.broadcast.emit('player_join', player_data);
+    });
+
+    socket.on('move_player',function(player_data){
+      socket.broadcast.emit('player_move', player_data );
+    });
+
+    socket.on('disconnect',function(){
+      socket.broadcast.emit('disconnected', socket.uuid);
+      for(var i in players){
+            if(players[i]==socket.uuid){
+                players.splice(i,1);
+                break;
+                }
+        }
+    });
 });
