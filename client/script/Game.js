@@ -39,7 +39,9 @@ function create() {
     map.addTilesetImage('tiles', 'tiles');
     layer = map.createLayer('Tile Layer 1');
 
-    finder = new PF.AStarFinder();
+    finder = new PF.AStarFinder({
+         allowDiagonal: true
+    });
 
     height = layer.layer.height;
     width = layer.layer.width;
@@ -189,6 +191,7 @@ function raycast(pointer) {
     var grid = this.masterGrid.clone();
     var path = finder.findPath(Math.floor(p.world.x/32),Math.floor(p.world.y/32), tileHits[0].x,tileHits[0].y, grid);
 
+    moveIndex = 0;
     moveArray = path;
     movePlayer();
 
