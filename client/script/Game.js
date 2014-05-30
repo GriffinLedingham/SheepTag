@@ -1,110 +1,103 @@
 var game = new Phaser.Game(800, 600, Phaser.AUTO, 'sheep-tag', { preload: preload, create: create, update: update, render:render });
 
 function preload() {
-
     game.load.tilemap('level', 'data/Level1.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles', 'assets/tiles.png');
     game.load.image('player', 'assets/player.png');
-
-
 }
 
 var tileLength = 32;
-
 var map;
+var line;
 var layer;
 var layer2;
 var layer3;
 var cursors;
-var line;
 var tileHits = [];
 var plotting = false;
 var p;
 var height;
 var width;
-
 var finder;
-
 var lastClick = null;
-
 var moveArray = [];
 var moveIndex = 0;
-
 var masterGrid;
+var uuid;
+var players;
+var socket;
 
 function create() {
+    socket = io.connect('http://192.168.1.108:3000');
+
+    players = {};
+    
+    uuid = guid();
+    socket.emit('new_player', {uuid:uuid});
+
     line = new Phaser.Line();
+
+
     game.stage.backgroundColor = '#787878';
     map = game.add.tilemap('level');
     map.addTilesetImage('tiles', 'tiles');
     layer = map.createLayer('Tile Layer 1');
+   
+    height = layer.layer.height;
+    width = layer.layer.width;
+    layer.resizeWorld();
+    
+    game.physics.startSystem(Phaser.Physics.ARCADE);
+    
+    p = game.add.sprite(66, 92, 'player');
+    game.physics.enable(p, Phaser.Physics.ARCADE);
+    p.body.collideWorldBounds = true;
 
+    cursors = game.input.keyboard.createCursorKeys();
+    game.input.onDown.add(clickTile, this);
+    game.camera.follow(p);
+    
     finder = new PF.AStarFinder({
          allowDiagonal: true
     });
-
-    height = layer.layer.height;
-    width = layer.layer.width;
-
-    layer.resizeWorld();
-    cursors = game.input.keyboard.createCursorKeys();
-    game.input.onDown.add(clickTile, this);
-    p = game.add.sprite(32, 32, 'player');
-
-    game.physics.enable(p);
-
-    p.body.collideWorldBounds = true;
-    game.camera.follow(p);
-
     masterGrid = new PF.Grid(width,height);
 
+    socket.on('player_join',function(player_data){
+        players[player_data.uuid] = game.add.sprite(66, 92, 'player');
+        game.physics.enable(players[player_data.uuid],  Phaser.Physics.ARCADE);
+    });
 
+    socket.on('player_move',function(player_data){
+        if(typeof players[player_data.uuid] !== 'undefined')
+        {
+            players[player_data.uuid].x = player_data.x;
+            players[player_data.uuid].y = player_data.y;
+        }
+    });
+
+    socket.on('sync_players',function(list){
+        for(var i = 0;i<list.length;i++)
+        {
+            if(list[i] !== uuid)
+            {
+                players[list[i]] = game.add.sprite(66, 92, 'player');
+                game.physics.enable(players[list[i]],  Phaser.Physics.ARCADE);
+            }
+        }
+    });
+
+    socket.on('disconnected',function(id){
+        players[id].destroy();
+    });
 
 }
 
 function update() {
-    game.physics.arcade.collide(p, layer);
+   
+    game.physics.arcade.collide(p, players, function(){console.log('hi');});
 
-    // if(moveIndex < moveArray.length)
-    // {
-
-    //     //x and y we want to aim to for this movement step
-    //     var goal = moveArray[moveIndex];
-
-
-    //     if(lastTile.x == goal[0] || lastTile.y == goal[1])
-    //     {
-    //         console.log(lastTile);
-    //         console.log(goal);
-    //         moveIndex++;
-    //     }
-
-
-    //     var playerGridX = Math.floor(p.world.x/32);
-    //     var playerGridY = Math.floor(p.world.y/32);
-    //     lastTile = {x:playerGridX, y:playerGridY};
-
-    //     if(playerGridX < goal[0])
-    //     {
-    //         p.body.velocity.x = 200;
-    //     }
-    //     else if(playerGridX > goal[0])
-    //     {
-    //         p.body.velocity.x = -200;
-    //     }
-
-    //     if(playerGridY < goal[0])
-    //     {
-    //         p.body.velocity.y = 200;
-    //     }
-    //     else if(playerGridY > goal[0])
-    //     {
-    //         p.body.velocity.y = -200;
-    //     }
-
-
-
-    // }
+    var player_data = {x:p.world.x, y:p.world.y, uuid: uuid};
+    socket.emit('move_player', player_data);
 
     if(moveArray.length !== 0)
     {   
@@ -197,3 +190,15 @@ function raycast(pointer) {
 
     return tileHits[0];
 }
+
+var guid = (function() {
+  function s4() {
+    return Math.floor((1 + Math.random()) * 0x10000)
+               .toString(16)
+               .substring(1);
+  }
+  return function() {
+    return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+           s4() + '-' + s4() + s4() + s4();
+  };
+})();
