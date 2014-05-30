@@ -13,19 +13,39 @@ io.set('log level', 0);
 
 var players = [];
 
+var typeCount = 2;
+
 io.sockets.on('connection', function (socket) {
     console.log('joined');
     socket.uuid = null;
+    socket.playerType = null;
 
     socket.on('new_player',function(player_data){
+      if(typeCount % 2 === 0)
+      {
+        socket.playerType = 'sheep';
+      }
+      else
+      {
+        socket.playerType = 'wolf';
+      }
+
+      typeCount++;
+
       socket.uuid = player_data.uuid;
+
       players.push(player_data.uuid);
+
+      socket.emit('join_game', socket.playerType);
+
       socket.emit('sync_players',players);
+
       socket.broadcast.emit('player_join', player_data);
     });
 
     socket.on('move_player',function(player_data){
       socket.broadcast.emit('player_move', player_data );
+
     });
 
     socket.on('disconnect',function(){

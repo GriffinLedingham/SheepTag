@@ -4,6 +4,7 @@ function preload() {
     game.load.tilemap('level', 'data/Level1.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles', 'assets/tiles.png');
     game.load.image('player', 'assets/player.png');
+    game.load.image('wolf', 'assets/wolf.png');
 }
 
 var tileLength = 32;
@@ -11,7 +12,7 @@ var map;
 var line;
 var layer;
 var layer2;
-var layer3;
+var hitLayer;
 var cursors;
 var tileHits = [];
 var plotting = false;
@@ -26,6 +27,8 @@ var masterGrid;
 var uuid;
 var players;
 var socket;
+var playerType;
+var authed = false;
 
 function create() {
     socket = io.connect('http://192.168.1.108:3000');
@@ -33,7 +36,6 @@ function create() {
     players = {};
     
     uuid = guid();
-    socket.emit('new_player', {uuid:uuid});
 
     line = new Phaser.Line();
 
@@ -42,29 +44,26 @@ function create() {
     map = game.add.tilemap('level');
     map.addTilesetImage('tiles', 'tiles');
     layer = map.createLayer('Tile Layer 1');
-   
+    layer2 = map.createLayer('Tile Layer 2');
+    hitLayer = map.createLayer('Hit Layer');
+
     height = layer.layer.height;
     width = layer.layer.width;
     layer.resizeWorld();
     
-    game.physics.startSystem(Phaser.Physics.ARCADE);
     
-    p = game.add.sprite(66, 92, 'player');
-    game.physics.enable(p, Phaser.Physics.ARCADE);
-    p.body.collideWorldBounds = true;
+    
+    socket.emit('new_player', {uuid:uuid});
 
-    cursors = game.input.keyboard.createCursorKeys();
-    game.input.onDown.add(clickTile, this);
-    game.camera.follow(p);
-    
-    finder = new PF.AStarFinder({
-         allowDiagonal: true
+    socket.on('join_game',function(type){
+        startGame(type);
     });
-    masterGrid = new PF.Grid(width,height);
 
     socket.on('player_join',function(player_data){
-        players[player_data.uuid] = game.add.sprite(66, 92, 'player');
+        players[player_data.uuid] = game.add.sprite(23,32, 'player');
         game.physics.enable(players[player_data.uuid],  Phaser.Physics.ARCADE);
+        players[player_data.uuid].body.immovable = true;
+        players[player_data.uuid].anchor.setTo(0.5, 1);
     });
 
     socket.on('player_move',function(player_data){
@@ -80,8 +79,11 @@ function create() {
         {
             if(list[i] !== uuid)
             {
-                players[list[i]] = game.add.sprite(66, 92, 'player');
+                players[list[i]] = game.add.sprite(23,32, 'player');
                 game.physics.enable(players[list[i]],  Phaser.Physics.ARCADE);
+                players[list[i]].body.immovable = true;
+                players[list[i]].anchor.setTo(0.5, 1);
+
             }
         }
     });
@@ -92,17 +94,70 @@ function create() {
 
 }
 
+function startGame(type){
+
+    game.physics.startSystem(Phaser.Physics.ARCADE);
+
+    playerType = type;
+
+    if(playerType === 'wolf')
+    {
+        p = game.add.sprite(23,32, 'wolf');
+    }
+    else
+    {
+        p = game.add.sprite(23,32, 'player');
+    }
+    game.physics.enable(p, Phaser.Physics.ARCADE);
+    p.body.collideWorldBounds = true;
+    p.anchor.setTo(0.5, 1);
+
+    cursors = game.input.keyboard.createCursorKeys();
+    game.input.onDown.add(clickTile, this);
+    game.camera.follow(p);
+    
+    finder = new PF.AStarFinder(
+    );
+    masterGrid = new PF.Grid(width,height);
+
+    var hitLayerArray = hitLayer.layer.data;
+    console.log(hitLayerArray);
+    console.log(masterGrid);
+    for(var i in hitLayerArray)
+    {
+        for(var j in hitLayerArray[i])
+        {
+            if(hitLayerArray[i][j].index !== -1)
+            {
+                masterGrid.nodes[i][j].walkable = false;
+            }
+        }
+    }
+    authed = true;
+}
+
 function update() {
-   
+    if(!authed)
+    {
+        return;
+    }
+
     game.physics.arcade.collide(p, players, function(){console.log('hi');});
+
+    for(var i in players)
+    {
+        game.physics.arcade.collide(p,players[i], function(){
+            movePlayer();
+        });
+    }
 
     var player_data = {x:p.world.x, y:p.world.y, uuid: uuid};
     socket.emit('move_player', player_data);
 
     if(moveArray.length !== 0)
     {   
-        if(p.world.x > (moveArray[moveIndex][0]*tileLength) && p.world.x < (moveArray[moveIndex][0]*tileLength)+tileLength &&
-                p.world.y > (moveArray[moveIndex][1]*tileLength) && p.world.y < (moveArray[moveIndex][1]*tileLength)+tileLength)
+        if(p.world.x > (moveArray[moveIndex][0]*tileLength) && p.world.x < (moveArray[moveIndex][0]*tileLength)+(tileLength) &&
+                p.world.y > (moveArray[moveIndex][1]*tileLength) && p.world.y < (moveArray[moveIndex][1]*tileLength)+(tileLength))
         {
             moveIndex++;
             if(moveIndex === moveArray.length)
@@ -122,30 +177,33 @@ function update() {
 
 function movePlayer()
 {
-    var player = {};
-    player.x = p.world.x;
-    player.y = p.world.y;
+    if(typeof moveArray[moveIndex] !== 'undefined')
+    {
+        var player = {};
+        player.x = p.world.x;
+        player.y = p.world.y;
 
-    var path_point = {};
-    path_point.x = moveArray[moveIndex][0]*tileLength + tileLength/2;
-    path_point.y = moveArray[moveIndex][1]*tileLength + tileLength/2;
+        var path_point = {};
+        path_point.x = moveArray[moveIndex][0]*tileLength + tileLength/2;
+        path_point.y = moveArray[moveIndex][1]*tileLength + tileLength/2;
 
-    //Get Direction
-    var dir = {};
-    dir.x = path_point.x - player.x;
-    dir.y = path_point.y - player.y;
+        //Get Direction
+        var dir = {};
+        dir.x = path_point.x - player.x;
+        dir.y = path_point.y - player.y;
 
-    //Normalize
-    var dir_length =  Math.sqrt(Math.pow(dir.x,2) + Math.pow(dir.y,2));
-    var dir_normalized = {};
-    dir_normalized.x = dir.x / dir_length;
-    dir_normalized.y = dir.y / dir_length;
+        //Normalize
+        var dir_length =  Math.sqrt(Math.pow(dir.x,2) + Math.pow(dir.y,2));
+        var dir_normalized = {};
+        dir_normalized.x = dir.x / dir_length;
+        dir_normalized.y = dir.y / dir_length;
 
-    player.velx = dir_normalized.x * 200;
-    player.vely = dir_normalized.y * 200;
+        player.velx = dir_normalized.x * 200;
+        player.vely = dir_normalized.y * 200;
 
-    p.body.velocity.x = player.velx;
-    p.body.velocity.y = player.vely;
+        p.body.velocity.x = player.velx;
+        p.body.velocity.y = player.vely;
+    }
 }
 
 function render() {
