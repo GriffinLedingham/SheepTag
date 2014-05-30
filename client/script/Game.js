@@ -30,9 +30,6 @@ var lastClick = null;
 var moveArray = [];
 var moveIndex = 0;
 
-var lastTile = {x:0,y:0};
-
-
 var masterGrid;
 
 function create() {
@@ -51,13 +48,14 @@ function create() {
     cursors = game.input.keyboard.createCursorKeys();
     game.input.onDown.add(clickTile, this);
     p = game.add.sprite(32, 32, 'player');
+
     game.physics.enable(p);
+
     p.body.collideWorldBounds = true;
     game.camera.follow(p);
 
     masterGrid = new PF.Grid(width,height);
 
-    movePlayer();
 
 
 }
@@ -106,22 +104,36 @@ function update() {
 
     // }
 
-    if(p.body.x === (2*tileLength)+tileLength/2 && p.body.y === (2*tileLength)+tileLength/2){
-        //Move to next point
-        console.log('hi');
-
+    if(moveArray.length !== 0)
+    {   
+        if(p.world.x > (moveArray[moveIndex][0]*tileLength) && p.world.x < (moveArray[moveIndex][0]*tileLength)+tileLength &&
+                p.world.y > (moveArray[moveIndex][1]*tileLength) && p.world.y < (moveArray[moveIndex][1]*tileLength)+tileLength)
+        {
+            moveIndex++;
+            if(moveIndex === moveArray.length)
+            {
+                moveArray = [];
+                moveIndex = 0;
+                p.body.velocity.x = 0;
+                p.body.velocity.y = 0;
+            }
+            else
+            {
+                movePlayer();
+            }
+        }
     }
 }
 
 function movePlayer()
 {
     var player = {};
-    player.x = p.body.x;
-    player.y = p.body.y;
+    player.x = p.world.x;
+    player.y = p.world.y;
 
     var path_point = {};
-    path_point.x = (2*tileLength)+tileLength/2;
-    path_point.y = (2*tileLength)+tileLength/2;
+    path_point.x = moveArray[moveIndex][0]*tileLength + tileLength/2;
+    path_point.y = moveArray[moveIndex][1]*tileLength + tileLength/2;
 
     //Get Direction
     var dir = {};
@@ -131,7 +143,7 @@ function movePlayer()
     //Normalize
     var dir_length =  Math.sqrt(Math.pow(dir.x,2) + Math.pow(dir.y,2));
     var dir_normalized = {};
-    dir_normalized.y = dir.x / dir_length;
+    dir_normalized.x = dir.x / dir_length;
     dir_normalized.y = dir.y / dir_length;
 
     player.velx = dir_normalized.x * 200;
@@ -178,8 +190,7 @@ function raycast(pointer) {
     var path = finder.findPath(Math.floor(p.world.x/32),Math.floor(p.world.y/32), tileHits[0].x,tileHits[0].y, grid);
 
     moveArray = path;
-
-    lastClick = {x: tileHits[0].x, y: tileHits[0].y};
+    movePlayer();
 
     return tileHits[0];
 }
