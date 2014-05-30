@@ -1,84 +1,75 @@
 var game = new Phaser.Game(800, 600, Phaser.AUTO, 'sheep-tag', { preload: preload, create: create, update: update, render:render });
 
 function preload() {
-
     game.load.tilemap('level', 'data/Level1.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles', 'assets/tiles.png');
     game.load.image('player', 'assets/player.png');
-
-
 }
 
 var tileLength = 32;
-
 var map;
+var line;
 var layer;
 var layer2;
 var layer3;
 var cursors;
-var line;
 var tileHits = [];
 var plotting = false;
 var p;
 var height;
 var width;
-
 var finder;
-
 var lastClick = null;
-
 var moveArray = [];
 var moveIndex = 0;
-
 var masterGrid;
-
 var uuid;
-
 var players;
-
 var socket;
 
 function create() {
-
-    game.physics.startSystem(Phaser.Physics.ARCADE);
-
     socket = io.connect('http://192.168.1.108:3000');
+
+    players = {};
+    
     uuid = guid();
-    socket.emit('my_uuid', uuid);
     socket.emit('new_player', {uuid:uuid});
+
     line = new Phaser.Line();
+
+
     game.stage.backgroundColor = '#787878';
     map = game.add.tilemap('level');
     map.addTilesetImage('tiles', 'tiles');
     layer = map.createLayer('Tile Layer 1');
-    finder = new PF.AStarFinder({
-         allowDiagonal: true
-    });
+   
     height = layer.layer.height;
     width = layer.layer.width;
     layer.resizeWorld();
+    
+    game.physics.startSystem(Phaser.Physics.ARCADE);
+    
+    p = game.add.sprite(66, 92, 'player');
+    game.physics.enable(p, Phaser.Physics.ARCADE);
+    p.body.collideWorldBounds = true;
+
     cursors = game.input.keyboard.createCursorKeys();
     game.input.onDown.add(clickTile, this);
-    p = game.add.sprite(32, 32, 'player');
-    game.physics.enable(p);
-    p.body.collideWorldBounds = true;
     game.camera.follow(p);
+    
+    finder = new PF.AStarFinder({
+         allowDiagonal: true
+    });
     masterGrid = new PF.Grid(width,height);
-    players = {};
 
     socket.on('player_join',function(player_data){
-        players[player_data.uuid] = game.add.sprite(32, 32, 'player');
+        players[player_data.uuid] = game.add.sprite(66, 92, 'player');
         game.physics.enable(players[player_data.uuid],  Phaser.Physics.ARCADE);
     });
 
     socket.on('player_move',function(player_data){
         if(typeof players[player_data.uuid] !== 'undefined')
         {
-            
-            
-            players[player_data.uuid].x = player_data.x;
-            players[player_data.uuid].y = player_data.y;
-
             players[player_data.uuid].x = player_data.x;
             players[player_data.uuid].y = player_data.y;
         }
@@ -89,7 +80,7 @@ function create() {
         {
             if(list[i] !== uuid)
             {
-                players[list[i]] = game.add.sprite(32, 32, 'player');
+                players[list[i]] = game.add.sprite(66, 92, 'player');
                 game.physics.enable(players[list[i]],  Phaser.Physics.ARCADE);
             }
         }
@@ -103,11 +94,7 @@ function create() {
 
 function update() {
    
-    for(var i in players)
-    {
-        game.physics.arcade.collide(p, players[i]);
-    }
-
+    game.physics.arcade.collide(p, players, function(){console.log('hi');});
 
     var player_data = {x:p.world.x, y:p.world.y, uuid: uuid};
     socket.emit('move_player', player_data);

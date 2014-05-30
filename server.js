@@ -14,13 +14,11 @@ io.set('log level', 0);
 var players = [];
 
 io.sockets.on('connection', function (socket) {
-  console.log('joined');
-  socket.uuid = null;
-  socket.on('my_uuid',function(id){
-    socket.uuid = id;
-  });
+    console.log('joined');
+    socket.uuid = null;
 
     socket.on('new_player',function(player_data){
+      socket.uuid = player_data.uuid;
       players.push(player_data.uuid);
       socket.emit('sync_players',players);
       socket.broadcast.emit('player_join', player_data);
