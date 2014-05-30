@@ -60,9 +60,17 @@ function create() {
     });
 
     socket.on('player_join',function(player_data){
-        players[player_data.uuid] = game.add.sprite(23,32, 'player');
+        console.log('hi');
+        if(player_data.type === 'wolf')
+        {
+            players[player_data.uuid] = game.add.sprite(23,32, 'wolf');     
+        }
+        else
+        {
+            players[player_data.uuid] = game.add.sprite(23,32, 'player');
+        }
+        players[player_data.uuid].playerType = player_data.type;
         game.physics.enable(players[player_data.uuid],  Phaser.Physics.ARCADE);
-        players[player_data.uuid].body.immovable = true;
         players[player_data.uuid].anchor.setTo(0.5, 1);
     });
 
@@ -71,18 +79,27 @@ function create() {
         {
             players[player_data.uuid].x = player_data.x;
             players[player_data.uuid].y = player_data.y;
+            players[player_data.uuid].body.velocity.x = player_data.velX;
+            players[player_data.uuid].body.velocity.y = player_data.velY;
         }
     });
 
     socket.on('sync_players',function(list){
         for(var i = 0;i<list.length;i++)
         {
-            if(list[i] !== uuid)
+            if(list[i].uuid !== uuid)
             {
-                players[list[i]] = game.add.sprite(23,32, 'player');
-                game.physics.enable(players[list[i]],  Phaser.Physics.ARCADE);
-                players[list[i]].body.immovable = true;
-                players[list[i]].anchor.setTo(0.5, 1);
+                if(list[i].type === 'wolf')
+                {
+                    players[list[i].uuid] = game.add.sprite(23,32, 'wolf');
+                }
+                else
+                {
+                    players[list[i].uuid] = game.add.sprite(23,32, 'player');
+                }
+                players[list[i].uuid].playerType = list[i].type;
+                game.physics.enable(players[list[i].uuid],  Phaser.Physics.ARCADE);
+                players[list[i].uuid].anchor.setTo(0.5, 1);
 
             }
         }
@@ -116,7 +133,9 @@ function startGame(type){
     game.input.onDown.add(clickTile, this);
     game.camera.follow(p);
     
-    finder = new PF.AStarFinder(
+    finder = new PF.AStarFinder({
+        allowDiagonal: true
+    }
     );
     masterGrid = new PF.Grid(width,height);
 
@@ -142,16 +161,23 @@ function update() {
         return;
     }
 
-    game.physics.arcade.collide(p, players, function(){console.log('hi');});
-
     for(var i in players)
     {
-        game.physics.arcade.collide(p,players[i], function(){
+        game.physics.arcade.collide(p,players[i], function(you, them){
             movePlayer();
+            if(them.playerType === 'wolf' && playerType === 'sheep')
+            {
+                you.body.velocity.x = 0;
+                you.body.velocity.y = 0;
+                them.body.velocity.y = 0;
+                them.body.velocity.y = 0;
+                console.log('dead');
+            }
+
         });
     }
 
-    var player_data = {x:p.world.x, y:p.world.y, uuid: uuid};
+    var player_data = {x:p.world.x, y:p.world.y, uuid: uuid, velX: p.body.velocity.x, velY: p.body.velocity.y};
     socket.emit('move_player', player_data);
 
     if(moveArray.length !== 0)

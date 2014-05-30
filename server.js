@@ -34,12 +34,13 @@ io.sockets.on('connection', function (socket) {
 
       socket.uuid = player_data.uuid;
 
-      players.push(player_data.uuid);
+      players.push({uuid:player_data.uuid, type:socket.playerType});
 
       socket.emit('join_game', socket.playerType);
 
       socket.emit('sync_players',players);
 
+      player_data.type = socket.playerType;
       socket.broadcast.emit('player_join', player_data);
     });
 
@@ -51,7 +52,7 @@ io.sockets.on('connection', function (socket) {
     socket.on('disconnect',function(){
       socket.broadcast.emit('disconnected', socket.uuid);
       for(var i in players){
-            if(players[i]==socket.uuid){
+            if(players[i].uuid==socket.uuid){
                 players.splice(i,1);
                 break;
                 }
