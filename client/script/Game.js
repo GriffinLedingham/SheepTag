@@ -9,6 +9,8 @@ function preload() {
 
 }
 
+var tileLength = 32;
+
 var map;
 var layer;
 var layer2;
@@ -21,9 +23,17 @@ var p;
 var height;
 var width;
 
+var finder;
+
 var lastClick = null;
 
-var pathGrid = [];
+var moveArray = [];
+var moveIndex = 0;
+
+var lastTile = {x:0,y:0};
+
+
+var masterGrid;
 
 function create() {
     line = new Phaser.Line();
@@ -31,8 +41,12 @@ function create() {
     map = game.add.tilemap('level');
     map.addTilesetImage('tiles', 'tiles');
     layer = map.createLayer('Tile Layer 1');
+
+    finder = new PF.AStarFinder();
+
     height = layer.layer.height;
     width = layer.layer.width;
+
     layer.resizeWorld();
     cursors = game.input.keyboard.createCursorKeys();
     game.input.onDown.add(clickTile, this);
@@ -41,42 +55,90 @@ function create() {
     p.body.collideWorldBounds = true;
     game.camera.follow(p);
 
-    for(var i = 0; i< width;i++)
-    {
-        pathGrid[i] = [];
-        for(var j = 0; j< height ;j++)
-        {
-            pathGrid[i][j] = 0;
-        }
-    }
+    masterGrid = new PF.Grid(width,height);
 
-    var grid = new PF.Grid(width,height, pathGrid);
+    movePlayer();
+
+
 }
 
 function update() {
     game.physics.arcade.collide(p, layer);
-    p.body.velocity.x = 0;
-    p.body.velocity.y = 0;
 
-    if (cursors.up.isDown)
-    {
-            p.body.velocity.y = -200;
-    }
-    else if(cursors.down.isDown)
-    {
-        p.body.velocity.y = 200;
-    }
+    // if(moveIndex < moveArray.length)
+    // {
 
-    if (cursors.left.isDown)
-    {
-        p.body.velocity.x = -150;
-    }
-    else if (cursors.right.isDown)
-    {
-        p.body.velocity.x = 150;
-    }
+    //     //x and y we want to aim to for this movement step
+    //     var goal = moveArray[moveIndex];
 
 
+    //     if(lastTile.x == goal[0] || lastTile.y == goal[1])
+    //     {
+    //         console.log(lastTile);
+    //         console.log(goal);
+    //         moveIndex++;
+    //     }
+
+
+    //     var playerGridX = Math.floor(p.world.x/32);
+    //     var playerGridY = Math.floor(p.world.y/32);
+    //     lastTile = {x:playerGridX, y:playerGridY};
+
+    //     if(playerGridX < goal[0])
+    //     {
+    //         p.body.velocity.x = 200;
+    //     }
+    //     else if(playerGridX > goal[0])
+    //     {
+    //         p.body.velocity.x = -200;
+    //     }
+
+    //     if(playerGridY < goal[0])
+    //     {
+    //         p.body.velocity.y = 200;
+    //     }
+    //     else if(playerGridY > goal[0])
+    //     {
+    //         p.body.velocity.y = -200;
+    //     }
+
+
+
+    // }
+
+    if(p.body.x === (2*tileLength)+tileLength/2 && p.body.y === (2*tileLength)+tileLength/2){
+        //Move to next point
+        console.log('hi');
+
+    }
+}
+
+function movePlayer()
+{
+    var player = {};
+    player.x = p.body.x;
+    player.y = p.body.y;
+
+    var path_point = {};
+    path_point.x = (2*tileLength)+tileLength/2;
+    path_point.y = (2*tileLength)+tileLength/2;
+
+    //Get Direction
+    var dir = {};
+    dir.x = path_point.x - player.x;
+    dir.y = path_point.y - player.y;
+
+    //Normalize
+    var dir_length =  Math.sqrt(Math.pow(dir.x,2) + Math.pow(dir.y,2));
+    var dir_normalized = {};
+    dir_normalized.y = dir.x / dir_length;
+    dir_normalized.y = dir.y / dir_length;
+
+    player.velx = dir_normalized.x * 200;
+    player.vely = dir_normalized.y * 200;
+
+    p.body.velocity.x = player.velx;
+    p.body.velocity.y = player.vely;
 }
 
 function render() {
@@ -111,15 +173,13 @@ function raycast(pointer) {
     }
     plotting = false;
 
-    if(lastClick !== null)
-    {
-        var finder = new PF.AStarFinder();
-        var path = finder.findPath(lastClick.x,lastClick.y, tileHits[0].x,tileHits[0].y, pathGrid);
 
-        console.log(path);
-    }
+    var grid = this.masterGrid.clone();
+    var path = finder.findPath(Math.floor(p.world.x/32),Math.floor(p.world.y/32), tileHits[0].x,tileHits[0].y, grid);
 
-    lastClick = {x: tileHits[0].x, y: tileHits.y};
+    moveArray = path;
+
+    lastClick = {x: tileHits[0].x, y: tileHits[0].y};
 
     return tileHits[0];
 }
