@@ -42,7 +42,7 @@ var trapped = false;
 var beacon;
 
 function create() {
-    socket = io.connect('http://192.168.1.108:3000');
+    socket = io.connect('http://www.gittalk.ca');
 
     players = {};
     
