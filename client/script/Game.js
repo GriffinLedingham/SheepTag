@@ -1,11 +1,19 @@
-var game = new Phaser.Game(800, 600, Phaser.AUTO, 'sheep-tag', { preload: preload, create: create, update: update, render:render });
+winW = window.innerWidth;
+winH = window.innerHeight;
+
+var game = new Phaser.Game(winW, winH, Phaser.AUTO, 'sheep-tag', { preload: preload, create: create, update: update, render:render });
 
 function preload() {
     game.load.tilemap('level', 'data/Level1.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles', 'assets/tiles.png');
     game.load.image('player', 'assets/player.png');
     game.load.image('wolf', 'assets/wolf.png');
+    game.load.image('beacon', 'assets/beacon.png');
 }
+
+var spawns = [
+    {x:4,y:21},{x:33,y:16},{x:57,y:29},{x:53,y:46},{x:11,y:57},{x:32,y:2}
+];
 
 var tileLength = 32;
 var map;
@@ -29,6 +37,9 @@ var players;
 var socket;
 var playerType;
 var authed = false;
+var trapped = false;
+
+var beacon;
 
 function create() {
     socket = io.connect('http://192.168.1.108:3000');
@@ -109,6 +120,21 @@ function create() {
         players[id].destroy();
     });
 
+    socket.on('free',function(){
+        console.log('FREE');
+        console.log(trapped);
+        if(trapped === true){
+            var random = Math.floor(Math.random() * (spawns.length-1 - 0 + 1)) + 0;
+
+            var spawn = spawns[random];
+                p.x = spawn.x*32;
+                p.y = spawn.y*32;
+
+                console.log('TRAPPED SET FALSE');
+                trapped = false;
+        }
+    });
+
 }
 
 function startGame(type){
@@ -117,13 +143,17 @@ function startGame(type){
 
     playerType = type;
 
+    var random = Math.floor(Math.random() * (spawns.length-1 - 0 + 1)) + 0;
+
+        var spawn = spawns[random];
+
     if(playerType === 'wolf')
     {
-        p = game.add.sprite(23,32, 'wolf');
+        p = game.add.sprite(spawn.x*32,spawn.y*32, 'wolf');
     }
     else
     {
-        p = game.add.sprite(23,32, 'player');
+        p = game.add.sprite(spawn.x*32,spawn.y*32, 'player');
     }
     game.physics.enable(p, Phaser.Physics.ARCADE);
     p.body.collideWorldBounds = true;
@@ -133,9 +163,7 @@ function startGame(type){
     game.input.onDown.add(clickTile, this);
     game.camera.follow(p);
     
-    finder = new PF.AStarFinder({
-        allowDiagonal: true
-    }
+    finder = new PF.AStarFinder(
     );
     masterGrid = new PF.Grid(width,height);
 
@@ -152,6 +180,10 @@ function startGame(type){
             }
         }
     }
+
+    beacon = game.add.sprite(23*32,23*32, 'beacon');
+    game.physics.enable(beacon, Phaser.Physics.ARCADE);
+
     authed = true;
 }
 
@@ -161,20 +193,46 @@ function update() {
         return;
     }
 
+    
+
     for(var i in players)
     {
         game.physics.arcade.collide(p,players[i], function(you, them){
             movePlayer();
+            you.body.velocity.x = 0;
+            you.body.velocity.y = 0;
+            them.body.velocity.x = 0;
+            them.body.velocity.y = 0;
             if(them.playerType === 'wolf' && playerType === 'sheep')
             {
-                you.body.velocity.x = 0;
-                you.body.velocity.y = 0;
-                them.body.velocity.y = 0;
-                them.body.velocity.y = 0;
+                console.log('TRAPPED TRUE')
+                trapped = true;
+
+                you.body.x = 22*32;
+                you.body.y = 28*32;
                 console.log('dead');
             }
 
         });
+
+        if(Phaser.Rectangle.intersects(p.body, players[i].body))
+        {
+            if(players[i].playerType === 'wolf' && playerType === 'sheep')
+            {
+                
+                console.log('TRAPPED TRUE');
+                trapped = true;
+
+                p.body.x = 22*32;
+                p.body.y = 28*32;
+                console.log('dead');
+            }
+        }
+    }
+
+    if(Phaser.Rectangle.intersects(p.body, beacon.body))
+    {
+        socket.emit('free_all');
     }
 
     var player_data = {x:p.world.x, y:p.world.y, uuid: uuid, velX: p.body.velocity.x, velY: p.body.velocity.y};
@@ -264,13 +322,22 @@ function raycast(pointer) {
     }
     plotting = false;
 
+    if(masterGrid.nodes[tileHits[0].y][tileHits[0].x].walkable === true)
+    {
+        p.body.velocity.x = 0;
+        p.body.velocity.y = 0;
+    }
 
     var grid = this.masterGrid.clone();
+    
     var path = finder.findPath(Math.floor(p.world.x/32),Math.floor(p.world.y/32), tileHits[0].x,tileHits[0].y, grid);
 
-    moveIndex = 0;
-    moveArray = path;
-    movePlayer();
+    if(masterGrid.nodes[tileHits[0].y][tileHits[0].x].walkable === true)
+    {
+        moveIndex = 0;
+        moveArray = path;
+        movePlayer();
+    }
 
     return tileHits[0];
 }

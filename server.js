@@ -49,6 +49,10 @@ io.sockets.on('connection', function (socket) {
 
     });
 
+    socket.on('free_all',function(){
+      socket.broadcast.emit('free');
+    });
+
     socket.on('disconnect',function(){
       socket.broadcast.emit('disconnected', socket.uuid);
       for(var i in players){
